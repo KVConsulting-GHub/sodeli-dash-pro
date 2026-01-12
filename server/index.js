@@ -9,26 +9,21 @@ const app = express();
 const PORT = process.env.PORT || 8080;
 
 // ===== CORS
-const allowedOrigins = [
-  "http://localhost:5173",
+const allowedOrigins = new Set([
   "http://localhost:3000",
-  "https://SEU-PROJETO.vercel.app",
-];
+  "http://localhost:5173",
+  "https://sodeli-dash-pro.vercel.app",
+]);
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      return callback(new Error("Not allowed by CORS"));
+    origin: (origin, cb) => {
+      if (!origin) return cb(null, true); // curl/postman
+      return allowedOrigins.has(origin) ? cb(null, true) : cb(null, false); // só bloqueia silencioso, sem jogar erro e derrubar o app
     },
-    methods: ["GET"],
+    methods: ["GET", "OPTIONS"],
   })
 );
-
-app.use(express.json());
 
 // ===== Resolve credenciais (transforma em caminho absoluto)
 const credPath = process.env.GOOGLE_APPLICATION_CREDENTIALS

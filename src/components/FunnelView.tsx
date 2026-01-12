@@ -173,12 +173,13 @@ export const FunnelView: React.FC = () => {
   };
 
   useEffect(() => {
-    // primeira carga
     fetchData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   // Monta cards por plataforma + histórico diário pra modal
+  // ✅ remove "all" da grade de plataformas
+  // ✅ renomeia platform null -> "other" (Outros)
   const platformsUI: PlatformPerformance[] = useMemo(() => {
     if (!data?.platforms?.length) return [];
 
@@ -198,7 +199,13 @@ export const FunnelView: React.FC = () => {
     >();
 
     for (const r of data.platforms) {
-      const p = r.platform || "unknown";
+      const rawPlatform = r.platform;
+
+      // ❌ não entra no grid (é agregado gravado na base)
+      if (rawPlatform === "all") continue;
+
+      // null/undefined vira "other"
+      const p = rawPlatform ? rawPlatform : "other";
       const dateStr = normalizeDateValue(r.date);
 
       const cur = map.get(p) || {
@@ -249,18 +256,27 @@ export const FunnelView: React.FC = () => {
         impressions: x.impressions,
         cpl,
         cpv,
-        // @ts-ignore - seu type pode não ter dailyHistory
+        // @ts-ignore
         dailyHistory: x.dailyHistory,
       } as PlatformPerformance;
     });
 
-    const order = ["google_ads", "meta_ads", "linkedin_ads"];
+    // ordena: google/meta/linkedin primeiro, depois outros
+    const order = ["google_ads", "meta_ads", "linkedin_ads", "other"];
     arr.sort(
       (a: any, b: any) => order.indexOf(a.platform) - order.indexOf(b.platform)
     );
 
     return arr;
   }, [data]);
+
+  // ✅ grid responsivo:
+  // - se tiver 4 cards (google/meta/linkedin/outros) => 2x2 no desktop
+  // - senão => 3 colunas no desktop
+  const platformGridClass =
+    platformsUI.length === 4
+      ? "grid-cols-1 md:grid-cols-2"
+      : "grid-cols-1 md:grid-cols-3";
 
   if (loading) {
     return (
@@ -363,7 +379,8 @@ export const FunnelView: React.FC = () => {
           Visão Geral do Funil
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4">
+        {/* ✅ 3 + 3 no desktop */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           <MetricCard
             title="Leads Totais"
             value={formatNumber(total.leads)}
@@ -408,7 +425,7 @@ export const FunnelView: React.FC = () => {
           Desempenho por Plataforma
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className={`grid ${platformGridClass} gap-6`}>
           {platformsUI.map((p: any) => (
             <Card
               key={p.platform}
@@ -416,7 +433,9 @@ export const FunnelView: React.FC = () => {
             >
               <CardHeader className="border-b border-gray-100 pb-4">
                 <CardTitle className="capitalize flex justify-between items-center">
-                  {(p.platform || "").replaceAll("_", " ")}
+                  {p.platform === "other"
+                    ? "Outros"
+                    : (p.platform || "").replaceAll("_", " ")}
                   <PieChart className="h-4 w-4 text-gray-400" />
                 </CardTitle>
               </CardHeader>
@@ -470,8 +489,10 @@ export const FunnelView: React.FC = () => {
           <div className="bg-white rounded-lg shadow-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
             <div className="p-6 border-b border-gray-100 flex justify-between items-center">
               <h3 className="text-xl font-bold capitalize">
-                {(selectedPlatform.platform || "").replaceAll("_", " ")} -
-                Detalhes Diários
+                {selectedPlatform.platform === "other"
+                  ? "Outros"
+                  : (selectedPlatform.platform || "").replaceAll("_", " ")}{" "}
+                - Detalhes Diários
               </h3>
               <button
                 onClick={() => setSelectedPlatform(null)}
