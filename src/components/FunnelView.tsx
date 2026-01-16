@@ -342,9 +342,17 @@ export const FunnelView: React.FC = () => {
       const API_BASE = (
         (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8080"
       ).replace(/\/$/, "");
+
       const url = `${API_BASE}/api/revenue-forecast?dateStart=${dateStart}&dateEnd=${dateEnd}&platform=${plat}`;
 
-      const resp = await fetch(url);
+      const token = localStorage.getItem("auth_token");
+
+      const resp = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token || ""}`,
+        },
+      });
+
       const json = await resp.json();
       if (!resp.ok) throw new Error(json?.error || "Failed revenue forecast");
 
