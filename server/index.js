@@ -1,3 +1,12 @@
+const bcrypt = require("bcryptjs");
+const {
+  findUserByEmail,
+  createUser,
+  isEmailAllowed,
+} = require("./auth/authStore");
+const jwt = require("jsonwebtoken");
+const requireAuth = require("./auth/requireAuth");
+
 const path = require("path");
 require("dotenv").config({ path: path.resolve(__dirname, "../.env") });
 
@@ -21,7 +30,8 @@ app.use(
       if (!origin) return cb(null, true); // curl/postman
       return allowedOrigins.has(origin) ? cb(null, true) : cb(null, false); // bloqueia silencioso
     },
-    methods: ["GET", "OPTIONS"],
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
 
@@ -56,15 +66,115 @@ function daysAgoISO(n) {
   return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
+function requireAuthOrLocal(req, res, next) {
+  const bypass =
+    String(process.env.ALLOW_LOCAL_BYPASS || "").toLowerCase() === "true";
+  if (bypass) return next();
+  return requireAuth(req, res, next);
+}
+
 // ===== Healthcheck
 app.get("/health", (_, res) => {
   res.json({ ok: true });
 });
 
+app.post("/auth/register", async (req, res) => {
+  try {
+    const { name, email, password } = req.body;
+    if (!isEmailAllowed(email)) {
+      return res.status(403).json({
+        error: "E-mail não autorizado para cadastro",
+      });
+    }
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email e senha são obrigatórios" });
+    }
+
+    const existing = findUserByEmail(email);
+    if (existing) {
+      return res.status(409).json({ error: "Usuário já existe" });
+    }
+
+    const password_hash = await bcrypt.hash(password, 10);
+
+    const user = {
+      id: Date.now(),
+      name: name || null,
+      email,
+      password_hash,
+      role: "admin",
+      provider: "local",
+      created_at: new Date().toISOString(),
+    };
+
+    createUser(user);
+
+    return res.status(201).json({
+      ok: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (err) {
+    console.error("REGISTER ERROR:", err);
+    return res.status(500).json({
+      error: "Erro ao criar usuário",
+      details: err.message,
+    });
+  }
+});
+
+app.post("/auth/login", async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({ error: "Email e senha são obrigatórios" });
+    }
+
+    const user = findUserByEmail(email);
+    if (!user) {
+      return res.status(401).json({ error: "Credenciais inválidas" });
+    }
+
+    const valid = await bcrypt.compare(password, user.password_hash);
+    if (!valid) {
+      return res.status(401).json({ error: "Credenciais inválidas" });
+    }
+
+    const token = jwt.sign(
+      {
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      },
+      process.env.JWT_SECRET,
+      { expiresIn: "30m" }
+    );
+
+    return res.json({
+      ok: true,
+      token,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+      },
+    });
+  } catch (err) {
+    console.error("LOGIN ERROR:", err);
+    return res.status(500).json({ error: "Erro ao fazer login" });
+  }
+});
+
 // ============================
 // OVERVIEW (Dashboard principal)
 // ============================
-app.get("/api/overview", async (req, res) => {
+app.get("/api/overview", requireAuthOrLocal, async (req, res) => {
   try {
     const { dateStart, dateEnd, platform } = req.query;
 
@@ -315,7 +425,7 @@ GROUP BY 1
 // ============================
 // REVENUE FORECAST (Histórico + Cenários por DIA, dentro do período)
 // ============================
-app.get("/api/revenue-forecast", async (req, res) => {
+app.get("/api/revenue-forecast", requireAuthOrLocal, async (req, res) => {
   try {
     const { dateStart, dateEnd, platform } = req.query;
     const plat = platform || "all";
@@ -447,7 +557,7 @@ app.get("/api/revenue-forecast", async (req, res) => {
 // ============================
 // DEALS (CRM)
 // ============================
-app.get("/api/deals", async (req, res) => {
+app.get("/api/deals", requireAuthOrLocal, async (req, res) => {
   try {
     const { dateStart, dateEnd, limit } = req.query;
 
@@ -481,7 +591,7 @@ app.get("/api/deals", async (req, res) => {
 // ============================
 // CONTACTS (Marketing)
 // ============================
-app.get("/api/contacts", async (req, res) => {
+app.get("/api/contacts", requireAuthOrLocal, async (req, res) => {
   try {
     const { dateStart, dateEnd, limit } = req.query;
 

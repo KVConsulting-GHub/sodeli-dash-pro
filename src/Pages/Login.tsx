@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import { cn } from "../lib/utils";
 import logo from "../assets/SodeliLogoBranca.jpeg";
 
@@ -6,17 +6,49 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState("");
   const [senha, setSenha] = useState("");
   const [loading, setLoading] = useState(false);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  const API_BASE_URL =
+    (import.meta as any).env?.VITE_API_BASE_URL || "http://localhost:8080";
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reason = params.get("reason");
+    if (reason === "session_expired") {
+      setErrorMsg("Sua sessão expirou. Faça login novamente.");
+    }
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
+    setErrorMsg(null);
 
-    // ✅ mock: simula login
-    setTimeout(() => {
-      localStorage.setItem("auth_token", "ok");
+    try {
+      const res = await fetch(`${API_BASE_URL}/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password: senha }),
+      });
+
+      const data = await res.json();
+
+      if (!res.ok) {
+        setErrorMsg(data?.error || "Falha no login");
+        setLoading(false);
+        return;
+      }
+
+      // salva o JWT real
+      localStorage.setItem("auth_token", data.token);
+
       setLoading(false);
       onLogin();
-    }, 500);
+    } catch (err) {
+      console.error(err);
+      setErrorMsg("Erro ao conectar no servidor");
+      setLoading(false);
+    }
   }
 
   return (
@@ -36,6 +68,12 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
         <p className="text-sm text-gray-500 mb-6">
           Acesse sua conta para ver os dashboards.
         </p>
+
+        {errorMsg && (
+          <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-200 rounded-md p-2">
+            {errorMsg}
+          </div>
+        )}
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -74,9 +112,7 @@ export default function Login({ onLogin }: { onLogin: () => void }) {
           </button>
         </form>
 
-        <div className="mt-4 text-xs text-gray-400">
-          (Login mock só pra testar. Vamos integrar com backend depois.)
-        </div>
+        <div className="mt-4 text-xs text-gray-400"></div>
       </div>
     </div>
   );
