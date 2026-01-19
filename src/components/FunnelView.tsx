@@ -375,39 +375,49 @@ export const FunnelView: React.FC = () => {
   const platformsUI: PlatformCard[] = useMemo(() => {
     const crmPlat = data?.crm_by_platform || {};
 
-    // ✅ Se não vier marketing, mas tem CRM, ainda monta card de "other"
+    const basePlatforms = ["google_ads", "meta_ads", "linkedin_ads", "other"];
+
+    // Em "all" mostramos sempre as 4.
+    // Em filtro específico, mostramos só a selecionada.
+    const seedList =
+      platformApplied === "all" ? basePlatforms : [platformApplied];
+
+    // Se não vier marketing, ainda assim monta cards com CRM (ex: other/linkedin)
     if (!data?.platforms?.length) {
-      if (platformApplied === "other") {
-        const crmOther = crmPlat.other || { sales_crm: 0, revenue_crm: 0 };
+      return seedList.map((plat) => {
+        const crm = crmPlat[plat] || { sales_crm: 0, revenue_crm: 0 };
 
-        return [
-          {
-            platform: "other",
-            leads: Number(data?.total?.leads ?? 0),
-            qualified_leads: 0,
-            opportunities: Number(data?.total?.opportunities ?? 0),
+        const sales_crm = Number(crm.sales_crm || 0);
+        const revenue_crm = Number(crm.revenue_crm || 0);
 
-            spend: 0,
-            clicks: 0,
-            impressions: 0,
+        return {
+          platform: plat,
 
-            sales_crm: Number(crmOther.sales_crm || 0),
-            revenue_crm: Number(crmOther.revenue_crm || 0),
+          // Quando não tem marketing por plataforma, não temos leads/oportunidades por plataforma.
+          // Se estiver filtrado em uma plataforma específica, usamos o total como referência.
+          leads:
+            platformApplied !== "all" ? Number(data?.total?.leads ?? 0) : 0,
+          qualified_leads: 0,
+          opportunities:
+            platformApplied !== "all"
+              ? Number(data?.total?.opportunities ?? 0)
+              : 0,
 
-            cpl: null,
-            cpv: null,
-            roas: null,
-            ticket:
-              Number(crmOther.sales_crm || 0) > 0
-                ? Number(crmOther.revenue_crm || 0) /
-                  Number(crmOther.sales_crm || 0)
-                : null,
+          spend: 0,
+          clicks: 0,
+          impressions: 0,
 
-            dailyHistory: [],
-          },
-        ];
-      }
-      return [];
+          sales_crm,
+          revenue_crm,
+
+          cpl: null,
+          cpv: null,
+          roas: null,
+          ticket: sales_crm > 0 ? revenue_crm / sales_crm : null,
+
+          dailyHistory: [],
+        };
+      });
     }
 
     const map = new Map<
@@ -424,6 +434,21 @@ export const FunnelView: React.FC = () => {
       }
     >();
 
+    // ✅ SEED: garante que as plataformas existam no grid mesmo sem linha de marketing
+    for (const p of seedList) {
+      map.set(p, {
+        platform: p,
+        leads: 0,
+        qualified_leads: 0,
+        opportunities: 0,
+        spend: 0,
+        clicks: 0,
+        impressions: 0,
+        dailyHistory: [],
+      });
+    }
+
+    // Preenche com o que vier do marketing
     for (const r of data.platforms) {
       const rawPlatform = r.platform;
 
@@ -431,6 +456,10 @@ export const FunnelView: React.FC = () => {
       if (rawPlatform === "all") continue;
 
       const p = rawPlatform ? rawPlatform : "other";
+
+      // Se estamos filtrando uma plataforma específica, ignora as outras
+      if (platformApplied !== "all" && p !== platformApplied) continue;
+
       const dateStr = normalizeDateValue(r.date);
 
       const cur = map.get(p) || {
@@ -502,34 +531,6 @@ export const FunnelView: React.FC = () => {
         dailyHistory: x.dailyHistory,
       };
     });
-
-    // ✅ Se filtro aplicado for "other", garante que o card use os valores do total (CRM)
-    if (platformApplied === "other") {
-      const crmOther = crmPlat.other || { sales_crm: 0, revenue_crm: 0 };
-      arr = [
-        {
-          platform: "other",
-          leads: Number(data?.total?.leads ?? 0),
-          qualified_leads: 0,
-          opportunities: Number(data?.total?.opportunities ?? 0),
-          spend: 0,
-          clicks: 0,
-          impressions: 0,
-          sales_crm: Number(crmOther.sales_crm || 0),
-          revenue_crm: Number(crmOther.revenue_crm || 0),
-          cpl: null,
-          cpv: null,
-          roas: null,
-          ticket:
-            Number(crmOther.sales_crm || 0) > 0
-              ? Number(crmOther.revenue_crm || 0) /
-                Number(crmOther.sales_crm || 0)
-              : null,
-          dailyHistory: [],
-        },
-      ];
-      return arr;
-    }
 
     const order = ["google_ads", "meta_ads", "linkedin_ads", "other"];
     arr.sort((a, b) => order.indexOf(a.platform) - order.indexOf(b.platform));

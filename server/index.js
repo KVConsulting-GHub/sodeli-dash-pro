@@ -187,7 +187,11 @@ app.get("/api/overview", requireAuthOrLocal, async (req, res) => {
     const where = [];
     where.push(`date >= DATE(@start)`);
     where.push(`date <= DATE(@end)`);
-    if (plat !== "all") where.push(`platform = @platform`);
+    if (plat !== "all") {
+      where.push(`platform = @platform`);
+    } else {
+      where.push(`platform != 'all'`);
+    }
 
     const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
