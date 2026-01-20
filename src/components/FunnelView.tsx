@@ -475,10 +475,7 @@ export const FunnelView: React.FC = () => {
 
       cur.leads += Number(r.leads || 0);
       cur.qualified_leads += Number(r.qualified_leads || 0);
-      cur.opportunities = Math.max(
-        cur.opportunities,
-        Number(r.opportunities || 0)
-      );
+      cur.opportunities += Number(r.opportunities || 0);
 
       cur.spend += Number(r.spend || 0);
       cur.clicks += Number(r.clicks || 0);

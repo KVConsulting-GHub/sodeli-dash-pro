@@ -23,17 +23,22 @@ export const Layout: React.FC<LayoutProps> = ({
   onTabChange,
   onLogout,
 }) => {
-  const THEME_KEY = "theme";
+  const THEME_KEY = "sodeli_theme_v1";
   const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
+    // 🔥 migração: se existir a chave antiga, zera pra light e remove
+    const legacy = localStorage.getItem("theme"); // chave antiga
+    if (legacy) {
+      localStorage.removeItem("theme");
+      // opcional: se quiser garantir que ninguém fique preso no dark:
+      localStorage.setItem(THEME_KEY, "light");
+    }
+
+    // lê só a chave nova
     const saved = localStorage.getItem(THEME_KEY);
+    const isDark = saved === "dark";
 
-    // default explícito = light (evita gente "presa" em estados estranhos)
-    const theme = saved === "dark" ? "dark" : "light";
-    localStorage.setItem(THEME_KEY, theme);
-
-    const isDark = theme === "dark";
     document.documentElement.classList.toggle("dark", isDark);
     setDarkMode(isDark);
   }, []);

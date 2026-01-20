@@ -190,7 +190,9 @@ app.get("/api/overview", requireAuthOrLocal, async (req, res) => {
     if (plat !== "all") {
       where.push(`platform = @platform`);
     } else {
-      where.push(`platform != 'all'`);
+      // ✅ precisa incluir a linha "all" (onde o funil está)
+      // e também as plataformas (para montar os cards)
+      // então: não filtra por platform aqui
     }
 
     const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
@@ -224,31 +226,20 @@ app.get("/api/overview", requireAuthOrLocal, async (req, res) => {
 
     const [rows] = await bigquery.query({ query, params });
 
-    const FUNNEL_PLATFORMS = new Set([
-      "google_ads",
-      "meta_ads",
-      "linkedin_ads",
-    ]);
+    // --- separa rows 'all' e 'plataformas'
+    const allRows = rows.filter((r) => String(r.platform || "") === "all");
+    const platRows = rows.filter((r) => String(r.platform || "") !== "all");
 
-    const total = rows.reduce(
+    // --- total: vem SOMENTE do "all" (funil + marketing já consolidados na view)
+    const totalAgg = allRows.reduce(
       (acc, r) => {
-        const p = String(r.platform || "");
-
-        // ✅ Funil: só plataformas digitais
-        if (FUNNEL_PLATFORMS.has(p)) {
-          acc.leads += Number(r.leads || 0);
-          acc.qualified_leads += Number(r.qualified_leads || 0);
-          acc.opportunities = Math.max(
-            acc.opportunities,
-            Number(r.opportunities || 0)
-          );
-        }
-
-        // ✅ Marketing (investimento/cliques/impressões) continua somando só do que existir na visão
+        acc.leads += Number(r.leads || 0);
+        acc.qualified_leads += Number(r.qualified_leads || 0);
+        acc.opportunities += Number(r.opportunities || 0);
+        acc.sales += Number(r.sales || 0);
         acc.spend += Number(r.spend || 0);
         acc.clicks += Number(r.clicks || 0);
         acc.impressions += Number(r.impressions || 0);
-
         return acc;
       },
       {
@@ -261,6 +252,19 @@ app.get("/api/overview", requireAuthOrLocal, async (req, res) => {
         impressions: 0,
       }
     );
+
+    const total = {
+      leads: totalAgg.leads,
+      qualified_leads: totalAgg.qualified_leads,
+      opportunities: totalAgg.opportunities,
+
+      // o card usa sales_crm; mas manter aqui não atrapalha
+      sales: totalAgg.sales,
+
+      spend: totalAgg.spend,
+      clicks: totalAgg.clicks,
+      impressions: totalAgg.impressions,
+    };
 
     // ===== 2) Receita real do CRM (deals ganhos) no período
     const crmQuery = `
@@ -369,45 +373,6 @@ GROUP BY 1
         revenue_crm_total = 0;
       }
     }
-    // ✅ Se filtro for "other", preencher LEADS e OPORTUNIDADES via CRM
-    if (plat === "other") {
-      const crmOtherQuery = `
-    SELECT
-      COUNT(1) AS leads_other,
-      COUNTIF(
-        NOT (win IS TRUE OR LOWER(CAST(win AS STRING)) = 'true')
-        AND NOT LOWER(COALESCE(deal_stage_name, '')) LIKE '%perdid%'
-      ) AS opportunities_other
-    FROM \`${process.env.BQ_PROJECT_ID}.${DATASET}.rd_station__deals\`
-    WHERE
-      created_at IS NOT NULL
-      AND DATE(created_at) BETWEEN DATE(@start) AND DATE(@end)
-      AND (
-        CASE
-          WHEN LOWER(COALESCE(deal_source_name, '')) LIKE '%google%' THEN 'google_ads'
-          WHEN LOWER(COALESCE(deal_source_name, '')) LIKE '%meta%'
-            OR LOWER(COALESCE(deal_source_name, '')) LIKE '%facebook%'
-            OR LOWER(COALESCE(deal_source_name, '')) LIKE '%instagram%' THEN 'meta_ads'
-          WHEN LOWER(COALESCE(deal_source_name, '')) LIKE '%linkedin%' THEN 'linkedin_ads'
-          ELSE 'other'
-        END
-      ) = 'other'
-  `;
-
-      const [crmOtherRows] = await bigquery.query({
-        query: crmOtherQuery,
-        params: { start, end },
-      });
-
-      const crmOther = crmOtherRows?.[0] || {
-        leads_other: 0,
-        opportunities_other: 0,
-      };
-
-      // sobrescreve os números do funil para "Outros"
-      total.leads = Number(crmOther.leads_other || 0);
-      total.opportunities = Number(crmOther.opportunities_other || 0);
-    }
 
     // ===== resposta única
     return res.json({
@@ -417,7 +382,7 @@ GROUP BY 1
         sales_crm: sales_crm_total,
         revenue_crm: revenue_crm_total,
       },
-      platforms: rows,
+      platforms: plat === "all" ? platRows : rows,
       crm_by_platform,
     });
   } catch (err) {
