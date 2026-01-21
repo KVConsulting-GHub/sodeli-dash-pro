@@ -458,12 +458,12 @@ export const CRMView: React.FC = () => {
       <section className="bg-white rounded-lg border border-gray-200 shadow-sm p-4">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col md:flex-row gap-3">
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1 min-w-[180px]">
               <label className="text-xs text-gray-500 mb-1">Período</label>
               <select
                 value={period}
                 onChange={(e) => setPeriod(e.target.value as PeriodKey)}
-                className="h-10 px-3 rounded-md border border-gray-200 text-sm bg-white"
+                className="h-10 w-full px-3 rounded-md border border-gray-200 text-sm bg-white"
               >
                 <option value="today">Hoje</option>
                 <option value="month">Mês atual</option>
@@ -473,7 +473,7 @@ export const CRMView: React.FC = () => {
               </select>
             </div>
 
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1 min-w-[180px]">
               <label className="text-xs text-gray-500 mb-1">Data inicial</label>
               <input
                 type="date"
@@ -482,11 +482,11 @@ export const CRMView: React.FC = () => {
                   setDateStart(e.target.value);
                   setPeriod("custom");
                 }}
-                className="h-10 px-3 rounded-md border border-gray-200 text-sm"
+                className="h-10 w-full px-3 rounded-md border border-gray-200 text-sm"
               />
             </div>
 
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1 min-w-[180px]">
               <label className="text-xs text-gray-500 mb-1">Data final</label>
               <input
                 type="date"
@@ -495,12 +495,12 @@ export const CRMView: React.FC = () => {
                   setDateEnd(e.target.value);
                   setPeriod("custom");
                 }}
-                className="h-10 px-3 rounded-md border border-gray-200 text-sm"
+                className="h-10 w-full px-3 rounded-md border border-gray-200 text-sm"
               />
             </div>
 
             {/* ✅ novo: Plataforma */}
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1 min-w-[180px]">
               <label className="text-xs text-gray-500 mb-1">Plataforma</label>
               <select
                 value={platform}

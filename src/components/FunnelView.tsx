@@ -593,7 +593,7 @@ export const FunnelView: React.FC = () => {
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="flex flex-col md:flex-row gap-3">
             {/* Período */}
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1 min-w-[180px]">
               <label className="text-xs text-gray-500 mb-1">Período</label>
               <select
                 value={period}
@@ -609,7 +609,7 @@ export const FunnelView: React.FC = () => {
             </div>
 
             {/* Datas */}
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1 min-w-[180px]">
               <label className="text-xs text-gray-500 mb-1">Data inicial</label>
               <input
                 type="date"
@@ -618,11 +618,11 @@ export const FunnelView: React.FC = () => {
                   setDateStart(e.target.value);
                   setPeriod("custom");
                 }}
-                className="h-10 px-3 rounded-md border border-gray-200 text-sm"
+                className="h-10 w-full px-3 rounded-md border border-gray-200 text-sm"
               />
             </div>
 
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1 min-w-[180px]">
               <label className="text-xs text-gray-500 mb-1">Data final</label>
               <input
                 type="date"
@@ -631,17 +631,17 @@ export const FunnelView: React.FC = () => {
                   setDateEnd(e.target.value);
                   setPeriod("custom");
                 }}
-                className="h-10 px-3 rounded-md border border-gray-200 text-sm"
+                className="h-10 w-full px-3 rounded-md border border-gray-200 text-sm"
               />
             </div>
 
             {/* Plataforma (DRAFT) */}
-            <div className="flex flex-col">
+            <div className="flex flex-col flex-1 min-w-[180px]">
               <label className="text-xs text-gray-500 mb-1">Plataforma</label>
               <select
                 value={platformDraft}
                 onChange={(e) => setPlatformDraft(e.target.value)}
-                className="h-10 px-3 rounded-md border border-gray-200 text-sm bg-white"
+                className="h-10 w-full px-3 rounded-md border border-gray-200 text-sm bg-white"
               >
                 <option value="all">Todas</option>
                 <option value="google_ads">Google Ads</option>
