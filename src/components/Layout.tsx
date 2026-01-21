@@ -27,27 +27,26 @@ export const Layout: React.FC<LayoutProps> = ({
   const [darkMode, setDarkMode] = useState(false);
 
   useEffect(() => {
-    // 🔥 migração: se existir a chave antiga, zera pra light e remove
-    const legacy = localStorage.getItem("theme"); // chave antiga
-    if (legacy) {
-      localStorage.removeItem("theme");
-      // opcional: se quiser garantir que ninguém fique preso no dark:
-      localStorage.setItem(THEME_KEY, "light");
-    }
+    const html = document.documentElement;
 
-    // lê só a chave nova
-    const saved = localStorage.getItem(THEME_KEY);
-    const isDark = saved === "dark";
+    // aplica imediatamente
+    html.classList.toggle("dark", darkMode);
 
-    document.documentElement.classList.toggle("dark", isDark);
-    setDarkMode(isDark);
-  }, []);
+    // e blinda contra qualquer coisa que tente mudar depois
+    const id = window.setInterval(() => {
+      const shouldBeDark = darkMode;
+      const isDarkNow = html.classList.contains("dark");
+
+      if (shouldBeDark !== isDarkNow) {
+        html.classList.toggle("dark", shouldBeDark);
+      }
+    }, 200); // 200ms é leve e resolve o "pós-load"
+
+    return () => window.clearInterval(id);
+  }, [darkMode]);
 
   function toggleTheme() {
-    const html = document.documentElement;
-    const willBeDark = !html.classList.contains("dark");
-
-    html.classList.toggle("dark", willBeDark);
+    const willBeDark = !darkMode;
     localStorage.setItem(THEME_KEY, willBeDark ? "dark" : "light");
     setDarkMode(willBeDark);
   }

@@ -183,90 +183,77 @@ app.get("/api/overview", requireAuthOrLocal, async (req, res) => {
     const end = dateEnd || todayISO();
     const plat = platform || "all";
 
-    // ===== 1) Série diária (dashboard_overview_daily)
-    const where = [];
-    where.push(`date >= DATE(@start)`);
-    where.push(`date <= DATE(@end)`);
-    if (plat !== "all") {
-      where.push(`platform = @platform`);
-    } else {
-      // ✅ precisa incluir a linha "all" (onde o funil está)
-      // e também as plataformas (para montar os cards)
-      // então: não filtra por platform aqui
-    }
-
-    const whereClause = where.length ? `WHERE ${where.join(" AND ")}` : "";
-
-    const query = `
-      SELECT
-        date,
-        platform,
-        SUM(leads) AS leads,
-        SUM(qualified_leads) AS qualified_leads,
-        SUM(opportunities) AS opportunities,
-        SUM(sales) AS sales,
-        SUM(spend) AS spend,
-        SUM(clicks) AS clicks,
-        SUM(impressions) AS impressions,
-        SAFE_DIVIDE(SUM(spend), SUM(leads)) AS cpl,
-        SAFE_DIVIDE(SUM(spend), SUM(qualified_leads)) AS cpq,
-        SAFE_DIVIDE(SUM(spend), SUM(opportunities)) AS cpo,
-        SAFE_DIVIDE(SUM(spend), SUM(sales)) AS cpv,
-        SAFE_DIVIDE(SUM(qualified_leads), SUM(leads)) AS rate_leads_to_qualified,
-        SAFE_DIVIDE(SUM(opportunities), SUM(qualified_leads)) AS rate_qualified_to_opportunity,
-        SAFE_DIVIDE(SUM(sales), SUM(opportunities)) AS rate_opportunity_to_sale
-      FROM \`${process.env.BQ_PROJECT_ID}.${DATASET}.dashboard_overview_daily\`
-      ${whereClause}
-      GROUP BY date, platform
-      ORDER BY date ASC
-    `;
-
     const params = { start, end };
     if (plat !== "all") params.platform = plat;
 
-    const [rows] = await bigquery.query({ query, params });
+    // =========================================================
+    // 1) TOTAL (Visão Geral) -> Funil RD-like (view mensal) + Marketing do "all"
+    // =========================================================
 
-    // --- separa rows 'all' e 'plataformas'
-    const allRows = rows.filter((r) => String(r.platform || "") === "all");
-    const platRows = rows.filter((r) => String(r.platform || "") !== "all");
+    // 1.0) Marketing TOTAL (spend/clicks/impressions) vem do "all" da dashboard_overview_daily
+    const marketingTotalQuery = `
+      SELECT
+        SUM(spend) AS spend,
+        SUM(clicks) AS clicks,
+        SUM(impressions) AS impressions
+      FROM \`${process.env.BQ_PROJECT_ID}.${DATASET}.dashboard_overview_daily\`
+      WHERE
+        date BETWEEN DATE(@start) AND DATE(@end)
+        AND platform = 'all'
+    `;
 
-    // --- total: vem SOMENTE do "all" (funil + marketing já consolidados na view)
-    const totalAgg = allRows.reduce(
-      (acc, r) => {
-        acc.leads += Number(r.leads || 0);
-        acc.qualified_leads += Number(r.qualified_leads || 0);
-        acc.opportunities += Number(r.opportunities || 0);
-        acc.sales += Number(r.sales || 0);
-        acc.spend += Number(r.spend || 0);
-        acc.clicks += Number(r.clicks || 0);
-        acc.impressions += Number(r.impressions || 0);
-        return acc;
-      },
-      {
-        leads: 0,
-        qualified_leads: 0,
-        opportunities: 0,
-        sales: 0,
-        spend: 0,
-        clicks: 0,
-        impressions: 0,
-      }
-    );
+    const [mTotalRows] = await bigquery.query({
+      query: marketingTotalQuery,
+      params: { start, end },
+    });
 
-    const total = {
-      leads: totalAgg.leads,
-      qualified_leads: totalAgg.qualified_leads,
-      opportunities: totalAgg.opportunities,
-
-      // o card usa sales_crm; mas manter aqui não atrapalha
-      sales: totalAgg.sales,
-
-      spend: totalAgg.spend,
-      clicks: totalAgg.clicks,
-      impressions: totalAgg.impressions,
+    const marketingTotal = mTotalRows?.[0] || {
+      spend: 0,
+      clicks: 0,
+      impressions: 0,
     };
 
-    // ===== 2) Receita real do CRM (deals ganhos) no período
+    // 1.1) Funil TOTAL (RD-like) vem da v_rd_funnel_monthly
+    const funnelTotalQuery = `
+      SELECT
+        SUM(leads) AS leads,
+        SUM(opportunities) AS opportunities,
+        SUM(sales) AS sales,
+        SUM(revenue) AS revenue
+      FROM \`${process.env.BQ_PROJECT_ID}.${DATASET}.v_rd_funnel_monthly\`
+      WHERE date BETWEEN DATE(@start) AND DATE(@end)
+    `;
+
+    const [funnelRows] = await bigquery.query({
+      query: funnelTotalQuery,
+      params: { start, end },
+    });
+
+    const funnelTotal = funnelRows?.[0] || {
+      leads: 0,
+      opportunities: 0,
+      sales: 0,
+      revenue: 0,
+    };
+
+    const total = {
+      // RD-like
+      leads: Number(funnelTotal.leads || 0),
+      opportunities: Number(funnelTotal.opportunities || 0),
+      sales: Number(funnelTotal.sales || 0),
+
+      // Mantido (não temos regra 1:1 aqui)
+      qualified_leads: 0,
+
+      // Marketing
+      spend: Number(marketingTotal.spend || 0),
+      clicks: Number(marketingTotal.clicks || 0),
+      impressions: Number(marketingTotal.impressions || 0),
+    };
+
+    // =========================================================
+    // 2) CRM TOTAL (mantém como estava)
+    // =========================================================
     const crmQuery = `
       SELECT
         COUNT(1) AS sales_crm,
@@ -285,7 +272,9 @@ app.get("/api/overview", requireAuthOrLocal, async (req, res) => {
 
     const crm = crmRows?.[0] || { sales_crm: 0, revenue_crm: 0 };
 
-    // ===== 3) Visitas (GA4) no período (com clamp no range disponível)
+    // =========================================================
+    // 3) Visitantes (GA4) -> total_users, com clamp (mantém)
+    // =========================================================
     const ga4RangeQuery = `
       SELECT
         MIN(date) AS min_date,
@@ -310,7 +299,7 @@ app.get("/api/overview", requireAuthOrLocal, async (req, res) => {
       if (clampedStart <= clampedEnd) {
         const ga4Query = `
           SELECT
-            SUM(COALESCE(sessions, 0)) AS visits
+            SUM(COALESCE(total_users, 0)) AS visits
           FROM \`${process.env.BQ_PROJECT_ID}.${DATASET}.fact_ga4_daily\`
           WHERE date BETWEEN DATE(@start) AND DATE(@end)
         `;
@@ -327,31 +316,34 @@ app.get("/api/overview", requireAuthOrLocal, async (req, res) => {
       }
     }
 
-    // ===== 2.1) Vendas/Receita do CRM por plataforma (mapeando origem)
+    // =========================================================
+    // 4) CRM por plataforma (mantém como estava)
+    // =========================================================
     const crmByPlatformQuery = `
-SELECT
-  CASE
-    WHEN LOWER(COALESCE(deal_source_name, '')) LIKE '%google%' THEN 'google_ads'
-    WHEN LOWER(COALESCE(deal_source_name, '')) LIKE '%meta%' OR LOWER(COALESCE(deal_source_name, '')) LIKE '%facebook%' OR LOWER(COALESCE(deal_source_name, '')) LIKE '%instagram%' THEN 'meta_ads'
-    WHEN LOWER(COALESCE(deal_source_name, '')) LIKE '%linkedin%' THEN 'linkedin_ads'
-    ELSE 'other'
-  END AS platform,
-  COUNT(1) AS sales_crm,
-  SUM(COALESCE(amount_total, 0)) AS revenue_crm
-FROM \`${process.env.BQ_PROJECT_ID}.${DATASET}.rd_station__deals\`
-WHERE
-  (win IS TRUE OR LOWER(CAST(win AS STRING)) = 'true')
-  AND win_at IS NOT NULL
-  AND DATE(win_at) BETWEEN DATE(@start) AND DATE(@end)
-GROUP BY 1
-`;
+      SELECT
+        CASE
+          WHEN LOWER(COALESCE(deal_source_name, '')) LIKE '%google%' THEN 'google_ads'
+          WHEN LOWER(COALESCE(deal_source_name, '')) LIKE '%meta%'
+            OR LOWER(COALESCE(deal_source_name, '')) LIKE '%facebook%'
+            OR LOWER(COALESCE(deal_source_name, '')) LIKE '%instagram%' THEN 'meta_ads'
+          WHEN LOWER(COALESCE(deal_source_name, '')) LIKE '%linkedin%' THEN 'linkedin_ads'
+          ELSE 'other'
+        END AS platform,
+        COUNT(1) AS sales_crm,
+        SUM(COALESCE(amount_total, 0)) AS revenue_crm
+      FROM \`${process.env.BQ_PROJECT_ID}.${DATASET}.rd_station__deals\`
+      WHERE
+        (win IS TRUE OR LOWER(CAST(win AS STRING)) = 'true')
+        AND win_at IS NOT NULL
+        AND DATE(win_at) BETWEEN DATE(@start) AND DATE(@end)
+      GROUP BY 1
+    `;
 
     const [crmPlatRows] = await bigquery.query({
       query: crmByPlatformQuery,
       params: { start, end },
     });
 
-    // vira um objeto { google_ads: {...}, meta_ads: {...}, ... }
     const crm_by_platform = (crmPlatRows || []).reduce((acc, r) => {
       acc[r.platform] = {
         sales_crm: Number(r.sales_crm || 0),
@@ -374,6 +366,94 @@ GROUP BY 1
       }
     }
 
+    // =========================================================
+    // 5) Desempenho por Plataforma (SÉRIE) -> FUNIL RD-like + Marketing
+    // =========================================================
+
+    // 5.1) Funil por plataforma (RD-like) -> view nova
+    const funnelPlatWhere = [];
+    funnelPlatWhere.push(`date BETWEEN DATE(@start) AND DATE(@end)`);
+    if (plat !== "all") funnelPlatWhere.push(`platform = @platform`);
+    const funnelPlatWhereClause = `WHERE ${funnelPlatWhere.join(" AND ")}`;
+
+    const funnelByPlatformQuery = `
+      SELECT
+        date,
+        platform,
+        SUM(leads) AS leads,
+        SUM(opportunities) AS opportunities,
+        SUM(sales) AS sales,
+        SUM(revenue) AS revenue
+      FROM \`${process.env.BQ_PROJECT_ID}.${DATASET}.v_rd_funnel_by_platform\`
+      ${funnelPlatWhereClause}
+      GROUP BY date, platform
+    `;
+
+    // 5.2) Marketing por plataforma -> dashboard_overview_daily (sem all)
+    const marketingPlatWhere = [];
+    marketingPlatWhere.push(`date BETWEEN DATE(@start) AND DATE(@end)`);
+    marketingPlatWhere.push(`platform != 'all'`);
+    if (plat !== "all") marketingPlatWhere.push(`platform = @platform`);
+    const marketingPlatWhereClause = `WHERE ${marketingPlatWhere.join(
+      " AND "
+    )}`;
+
+    const marketingByPlatformQuery = `
+      SELECT
+        date,
+        platform,
+        SUM(spend) AS spend,
+        SUM(clicks) AS clicks,
+        SUM(impressions) AS impressions
+      FROM \`${process.env.BQ_PROJECT_ID}.${DATASET}.dashboard_overview_daily\`
+      ${marketingPlatWhereClause}
+      GROUP BY date, platform
+    `;
+
+    // 5.3) Join final em SQL para manter shape do front
+    const platformsQuery = `
+      WITH f AS (${funnelByPlatformQuery}),
+           m AS (${marketingByPlatformQuery}),
+           d AS (
+             SELECT date, platform FROM f
+             UNION DISTINCT
+             SELECT date, platform FROM m
+           )
+      SELECT
+        d.date,
+        d.platform,
+
+        -- Funil (RD-like)
+        COALESCE(f.leads, 0) AS leads,
+        0 AS qualified_leads,
+        COALESCE(f.opportunities, 0) AS opportunities,
+        COALESCE(f.sales, 0) AS sales,
+
+        -- Marketing
+        COALESCE(m.spend, 0) AS spend,
+        COALESCE(m.clicks, 0) AS clicks,
+        COALESCE(m.impressions, 0) AS impressions,
+
+        -- KPIs derivados
+        SAFE_DIVIDE(COALESCE(m.spend, 0), NULLIF(COALESCE(f.leads, 0), 0)) AS cpl,
+        NULL AS cpq,
+        SAFE_DIVIDE(COALESCE(m.spend, 0), NULLIF(COALESCE(f.opportunities, 0), 0)) AS cpo,
+        SAFE_DIVIDE(COALESCE(m.spend, 0), NULLIF(COALESCE(f.sales, 0), 0)) AS cpv,
+
+        NULL AS rate_leads_to_qualified,
+        NULL AS rate_qualified_to_opportunity,
+        SAFE_DIVIDE(COALESCE(f.sales, 0), NULLIF(COALESCE(f.opportunities, 0), 0)) AS rate_opportunity_to_sale
+      FROM d
+      LEFT JOIN f USING (date, platform)
+      LEFT JOIN m USING (date, platform)
+      ORDER BY date ASC
+    `;
+
+    const [platformRows] = await bigquery.query({
+      query: platformsQuery,
+      params,
+    });
+
     // ===== resposta única
     return res.json({
       total: {
@@ -382,7 +462,7 @@ GROUP BY 1
         sales_crm: sales_crm_total,
         revenue_crm: revenue_crm_total,
       },
-      platforms: plat === "all" ? platRows : rows,
+      platforms: platformRows,
       crm_by_platform,
     });
   } catch (err) {
@@ -433,8 +513,6 @@ app.get("/api/revenue-forecast", requireAuthOrLocal, async (req, res) => {
       ),
 
       -- 2) Datas do período: mantém duas colunas
-      --    - revenue_actual_filled: 0 quando não há venda (pra plotar o "Real")
-      --    - revenue_actual_raw: NULL quando não há venda (pra média móvel ignorar)
       filled AS (
         SELECT
           d AS date,
@@ -472,7 +550,7 @@ app.get("/api/revenue-forecast", requireAuthOrLocal, async (req, res) => {
         FROM calc
       ),
 
-      -- 5) Acurácia: últimos N dias do período (MAPE simples -> 0..1)
+      -- 5) Acurácia: últimos N dias do período
       accuracy AS (
         SELECT
           GREATEST(
@@ -511,7 +589,7 @@ app.get("/api/revenue-forecast", requireAuthOrLocal, async (req, res) => {
     return res.json({
       start,
       end,
-      horizon: 0, // agora não projetamos "pra frente" — é só cenário dentro do período
+      horizon: 0,
       maWindow,
       band,
       accuracy_rate: Number(out.accuracy_rate || 0),
@@ -530,11 +608,9 @@ app.get("/api/deals", requireAuthOrLocal, async (req, res) => {
   try {
     const { dateStart, dateEnd, limit } = req.query;
 
-    // defaults seguros
     const start = dateStart || daysAgoISO(30);
     const end = dateEnd || todayISO();
 
-    // limite controlado
     const lim = Math.min(Number(limit || 5000), 20000);
 
     const query = `
