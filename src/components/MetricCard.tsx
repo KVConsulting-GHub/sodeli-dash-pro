@@ -2,6 +2,7 @@ import React from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "./ui/Card";
 import { cn } from "../lib/utils";
 import { ArrowUpRight, ArrowDownRight } from "lucide-react";
+import { useTheme } from "../theme/ThemeContext";
 
 interface MetricCardProps {
   title: string;
@@ -20,26 +21,47 @@ export const MetricCard: React.FC<MetricCardProps> = ({
   icon,
   className,
 }) => {
+  const { darkMode } = useTheme();
+
   return (
     <Card
       className={cn(
-        "bg-white border-[#E5E5E5] dark:bg-[#0f0f10] dark:border-[#2a2a2a]",
+        "border rounded-lg transition-colors",
+        darkMode
+          ? "bg-[#0f0f10] border-[#2a2a2a] text-gray-100"
+          : "bg-white border-[#E5E5E5] text-gray-900",
         className
       )}
     >
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-        <CardTitle className="text-sm font-medium text-gray-500 uppercase tracking-wider dark:text-gray-400">
+        <CardTitle
+          className={cn(
+            "text-sm font-medium uppercase tracking-wider",
+            darkMode ? "text-gray-400" : "text-gray-500"
+          )}
+        >
           {title}
         </CardTitle>
 
-        {icon && <div className="text-gray-400 dark:text-gray-500">{icon}</div>}
+        {icon && (
+          <div className={cn(darkMode ? "text-gray-500" : "text-gray-400")}>
+            {icon}
+          </div>
+        )}
       </CardHeader>
 
       <CardContent>
-        <div className="text-2xl font-bold dark:text-[#f5f5f5]">{value}</div>
+        <div className={cn("text-2xl font-bold", darkMode && "text-[#f5f5f5]")}>
+          {value}
+        </div>
 
         {subValue && (
-          <div className="flex items-center mt-1 text-xl text-gray-500 dark:text-gray-400">
+          <div
+            className={cn(
+              "flex items-center mt-1 text-xl",
+              darkMode ? "text-gray-400" : "text-gray-500"
+            )}
+          >
             {trend === "up" && (
               <ArrowUpRight className="h-3 w-3 text-green-500 mr-1" />
             )}

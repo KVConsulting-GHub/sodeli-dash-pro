@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { ThemeProvider } from "../theme/ThemeContext";
 import {
   LayoutDashboard,
   Users,
@@ -73,139 +74,149 @@ export const Layout: React.FC<LayoutProps> = ({
   const avatarIcon = darkMode ? "text-gray-300" : "text-gray-600";
 
   return (
-    <div className={cn("min-h-screen transition-colors duration-200", shellBg)}>
-      {/* ================= HEADER ================= */}
-      <header
-        className={cn(
-          "h-28 fixed top-0 w-full z-50 flex items-center justify-between px-8 shadow-sm border-b transition-colors",
-          headerBg
-        )}
+    <ThemeProvider value={{ darkMode }}>
+      <div
+        className={cn("min-h-screen transition-colors duration-200", shellBg)}
       >
-        <div className="flex items-center gap-6">
-          <img
-            src={sodeliLogo}
-            alt="Grupo Sodéli"
-            className="h-16 w-auto object-contain"
-          />
+        {/* ================= HEADER ================= */}
+        <header
+          className={cn(
+            "h-28 fixed top-0 w-full z-50 flex items-center justify-between px-8 shadow-sm border-b transition-colors",
+            headerBg
+          )}
+        >
+          <div className="flex items-center gap-6">
+            <img
+              src={sodeliLogo}
+              alt="Grupo Sodéli"
+              className="h-16 w-auto object-contain"
+            />
 
-          <div className="flex flex-col leading-tight">
-            <span className="text-xl font-semibold tracking-tight">
-              Grupo Sodéli
-            </span>
-            <span className={cn("text-sm", subText)}>
-              Monitoramento & Performance
-            </span>
+            <div className="flex flex-col leading-tight">
+              <span className="text-xl font-semibold tracking-tight">
+                Grupo Sodéli
+              </span>
+              <span className={cn("text-sm", subText)}>
+                Monitoramento & Performance
+              </span>
+            </div>
           </div>
-        </div>
 
-        <div className="flex items-center gap-4 text-sm">
-          <span className={subtleText}>Admin</span>
-          <div
-            className={cn(
-              "w-9 h-9 rounded-full flex items-center justify-center",
-              avatarBg
-            )}
-          >
-            <Users className={cn("h-5 w-5", avatarIcon)} />
-          </div>
-        </div>
-      </header>
-
-      {/* ================= SIDEBAR ================= */}
-      <aside
-        className={cn(
-          "w-64 fixed top-28 bottom-0 left-0 overflow-y-auto z-40 border-r transition-colors",
-          sidebarBg
-        )}
-      >
-        <div className="p-6">
-          <p className="text-xs font-semibold text-gray-400 uppercase mb-4 tracking-wider">
-            Dashboards
-          </p>
-
-          <nav className="space-y-1">
-            <button
-              onClick={() => onTabChange("funnel")}
+          <div className="flex items-center gap-4 text-sm">
+            <span className={subtleText}>Admin</span>
+            <div
               className={cn(
-                "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                activeTab === "funnel"
-                  ? darkMode
-                    ? "bg-red-500/10 text-[#F4002B]"
-                    : "bg-red-50 text-[#F4002B]"
-                  : cn(darkMode ? "text-gray-300" : "text-gray-600", hoverItem)
+                "w-9 h-9 rounded-full flex items-center justify-center",
+                avatarBg
               )}
             >
-              <BarChart3 className="h-4 w-4" />
-              Funil de Marketing
-            </button>
+              <Users className={cn("h-5 w-5", avatarIcon)} />
+            </div>
+          </div>
+        </header>
+
+        {/* ================= SIDEBAR ================= */}
+        <aside
+          className={cn(
+            "w-64 fixed top-28 bottom-0 left-0 overflow-y-auto z-40 border-r transition-colors",
+            sidebarBg
+          )}
+        >
+          <div className="p-6">
+            <p className="text-xs font-semibold text-gray-400 uppercase mb-4 tracking-wider">
+              Dashboards
+            </p>
+
+            <nav className="space-y-1">
+              <button
+                onClick={() => onTabChange("funnel")}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                  activeTab === "funnel"
+                    ? darkMode
+                      ? "bg-red-500/10 text-[#F4002B]"
+                      : "bg-red-50 text-[#F4002B]"
+                    : cn(
+                        darkMode ? "text-gray-300" : "text-gray-600",
+                        hoverItem
+                      )
+                )}
+              >
+                <BarChart3 className="h-4 w-4" />
+                Funil de Marketing
+              </button>
+
+              <button
+                onClick={() => onTabChange("crm")}
+                className={cn(
+                  "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                  activeTab === "crm"
+                    ? darkMode
+                      ? "bg-red-500/10 text-[#F4002B]"
+                      : "bg-red-50 text-[#F4002B]"
+                    : cn(
+                        darkMode ? "text-gray-300" : "text-gray-600",
+                        hoverItem
+                      )
+                )}
+              >
+                <LayoutDashboard className="h-4 w-4" />
+                CRM & Vendas
+              </button>
+            </nav>
+
+            {/* ====== THEME TOGGLE ====== */}
+            <p className="text-xs font-semibold text-gray-400 uppercase mb-4 mt-8 tracking-wider">
+              Aparência
+            </p>
 
             <button
-              onClick={() => onTabChange("crm")}
+              onClick={toggleTheme}
               className={cn(
                 "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-                activeTab === "crm"
-                  ? darkMode
-                    ? "bg-red-500/10 text-[#F4002B]"
-                    : "bg-red-50 text-[#F4002B]"
-                  : cn(darkMode ? "text-gray-300" : "text-gray-600", hoverItem)
+                cn(darkMode ? "text-gray-300" : "text-gray-600", hoverItem)
               )}
             >
-              <LayoutDashboard className="h-4 w-4" />
-              CRM & Vendas
+              {darkMode ? (
+                <>
+                  <Sun className="h-4 w-4" />
+                  Modo claro
+                </>
+              ) : (
+                <>
+                  <Moon className="h-4 w-4" />
+                  Modo escuro
+                </>
+              )}
             </button>
-          </nav>
 
-          {/* ====== THEME TOGGLE ====== */}
-          <p className="text-xs font-semibold text-gray-400 uppercase mb-4 mt-8 tracking-wider">
-            Aparência
-          </p>
+            <p className="text-xs font-semibold text-gray-400 uppercase mb-4 mt-8 tracking-wider">
+              Conta
+            </p>
 
-          <button
-            onClick={toggleTheme}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-              cn(darkMode ? "text-gray-300" : "text-gray-600", hoverItem)
-            )}
-          >
-            {darkMode ? (
-              <>
-                <Sun className="h-4 w-4" />
-                Modo claro
-              </>
-            ) : (
-              <>
-                <Moon className="h-4 w-4" />
-                Modo escuro
-              </>
-            )}
-          </button>
+            <button
+              onClick={onLogout}
+              className={cn(
+                "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
+                cn(darkMode ? "text-gray-300" : "text-gray-600", hoverItem)
+              )}
+            >
+              <LogOut className="h-4 w-4" />
+              Sair
+            </button>
+          </div>
+        </aside>
 
-          <p className="text-xs font-semibold text-gray-400 uppercase mb-4 mt-8 tracking-wider">
-            Conta
-          </p>
-
-          <button
-            onClick={onLogout}
-            className={cn(
-              "w-full flex items-center gap-3 px-3 py-2 text-sm font-medium rounded-md transition-colors",
-              cn(darkMode ? "text-gray-300" : "text-gray-600", hoverItem)
-            )}
-          >
-            <LogOut className="h-4 w-4" />
-            Sair
-          </button>
-        </div>
-      </aside>
-
-      {/* ================= MAIN ================= */}
-      <main
-        className={cn(
-          "app-main ml-64 mt-28 px-6 py-6 min-h-[calc(100vh-7rem)] transition-colors",
-          mainBg
-        )}
-      >
-        <div className="max-w-[1400px] mx-auto">{children}</div>
-      </main>
-    </div>
+        {/* ================= MAIN ================= */}
+        <main
+          className={cn(
+            "app-main ml-64 mt-28 px-6 py-6 min-h-[calc(100vh-7rem)] transition-colors",
+            mainBg
+          )}
+        >
+          <div className="max-w-[1400px] mx-auto">{children}</div>
+        </main>
+      </div>
+    </ThemeProvider>
   );
 };
