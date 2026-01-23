@@ -58,7 +58,7 @@ export const MetricCard: React.FC<MetricCardProps> = ({
         {/* subValue ocupa sempre 1 linha (mesmo quando não tem) */}
         <div
           className={cn(
-            "flex items-center mt-1 text-xl whitespace-nowrap overflow-hidden text-ellipsis",
+            "flex items-center mt-1 text-x2 whitespace-nowrap overflow-hidden text-ellipsis",
             darkMode ? "text-gray-400" : "text-gray-500"
           )}
           title={subValue} // opcional: ao passar o mouse, vê o texto completo
